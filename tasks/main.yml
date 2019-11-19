@@ -1,2 +1,14 @@
 ---
 # tasks file for oracle-omc-gateway
+- name: Set basic facts about OMC gateway installation
+  include_tasks: facts.yml
+- name: Configure OS prerequisites for OMC Gateway
+  include_tasks: os.yml
+- name: Configure OS users & groups required of OMC
+  include_tasks: user.yml
+- name: Download latest OMC agent installation file
+  include_tasks: fetch.yml
+- name: Install OMC Gateway
+  include_tasks: install.yml
+- name: "Execute Gateway Post Install Steps on {{ansible_hostname}}"
+  include_tasks: post-install.yml

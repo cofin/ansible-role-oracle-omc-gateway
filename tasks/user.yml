@@ -1,0 +1,82 @@
+---
+- name: Creating groups
+  become: yes
+  become_user: root
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid | default(omit) }}"
+  with_items: "{{ omc_gateway_groups }}"
+  when: "omc_gateway_groups is defined"
+  tags: ["users", "groups", "configuration"]
+
+- name: Per-user group creation
+  become: yes
+  become_user: root
+  group:
+    name: "{{ item.username }}"
+    gid: "{{ item.gid | default(item.uid) | default(omit) }}"
+  with_items: "{{ omc_gateway_users }}"
+  when: "'group' not in item and omc_gateway_users_create_per_user_group"
+  tags: ["users", "configuration"]
+
+- name: User creation
+  become: yes
+  become_user: root
+  user:
+    name: "{{ item.username }}"
+    group: "{{ item.group | default(item.username if omc_gateway_users_create_per_user_group else omc_gateway_users_group) }}"
+    # empty string removes user from all secondary groups
+    groups: "{{ item.groups | join(',') if 'groups' in item else '' }}"
+    append: "{{ item.append | default(omit) }}"
+    shell: "{{ item.shell if item.shell is defined else omc_gateway_users_default_shell }}"
+    password: "{{ item.password if item.password is defined else '!' }}"
+    comment: "{{ item.name if item.name is defined else '' }}"
+    uid: "{{ item.uid | default(omit) }}"
+    home: "{{ item.home | default('/home/' + item.username) }}"
+    createhome: "{{ 'yes' if omc_gateway_users_create_homedirs else 'no' }}"
+    generate_ssh_key: "{{ item.generate_ssh_key | default(omit) }}"
+    update_password: "{{ item.update_password | default(omit) }}"
+  with_items: "{{ omc_gateway_users }}"
+  tags: ["users", "configuration"]
+
+- name: SSH keys
+  become: yes
+  become_user: root
+  authorized_key:
+    user: "{{ item.0.username }}"
+    key: "{{ item.1 }}"
+    path: "{{ item.0.home | default('/home/' + item.0.username) }}/{{ authorized_keys_file }}"
+  with_subelements:
+    - "{{omc_gateway_users}}"
+    - ssh_key
+    - skip_missing: yes
+  tags: ["users", "configuration"]
+
+- name: Setup user profiles
+  become: yes
+  become_user: root
+  blockinfile:
+    block: "{{ item.profile }}"
+    dest: "{{ item.home | default('/home/' + item.username) }}/.profile"
+    owner: "{{ item.username }}"
+    group: "{{ item.group | default(item.username if omc_gateway_users_create_per_user_group else users_group) }}"
+    mode: 0644
+    create: true
+  when: omc_gateway_users_create_homedirs and item.profile is defined
+  with_items: "{{ omc_gateway_users }}"
+
+- name: Configure ulimits for users
+  become: yes
+  become_user: root
+  pam_limits:
+    domain: "{{ item.0.username }}"
+    limit_type: "{{ item.1.limit_type }}"
+    limit_item: "{{ item.1.limit_item }}"
+    value: "{{item.1.value}}"
+  with_subelements:
+    - "{{omc_gateway_users}}"
+    - ulimits
+    - skip_missing: yes
+  register: omc_gateway_ulimits
+  notify: "reload sysctl config"
+  tags: ["users", "configuration"]

@@ -1,2 +1,32 @@
 ---
 # defaults file for oracle-omc-gateway
+omc_gateway_timezone: "America/Chicago"
+
+# enable or disable agent on execution
+omc_gateway_enabled: yes
+
+# install details
+omc_gateway_agent_port: "4459"
+omc_gateway_tenant_name: "changeme"
+omc_gateway_registration_key: "changeme"
+omc_gateway_url_endpoint: "https://localhost.localdomain"
+omc_gateway_reinstall_agent: yes
+omc_gateway_stage_dir: "/tmp/ansible-omc-cloudagent"
+omc_gateway_software_url: "https://storage.us2.oraclecloud.com/v1/Storage-a511425/omcprodglobal/cloudagent/linux.x64/latest/cloudagent_linux.x64.zip"
+omc_gateway_install_dir: "/opt/oracle/omc/gateway"
+omc_gateway_users_group: svc-omc
+omc_gateway_users:
+  - username: svc-omc
+    name: Oracle OMC Monitoring User
+    group: svc-omc
+    uid: 543198
+    ulimits:
+      - { limit_type: "-", limit_item: "nofile", value: 400000 }
+      - { limit_type: "-", limit_item: "nproc", value: 400000 }
+      - { limit_type: "soft", limit_item: "memlock", value: unlimited }
+      - { limit_type: "hard", limit_item: "memlock", value: unlimited }
+# List of groups to create
+omc_gateway_groups:
+  - name: svc-omc
+    gid: 543198
+    sudo: yes

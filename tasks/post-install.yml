@@ -1,0 +1,100 @@
+---
+# - name: ensure agent is running the latest version
+#   shell: |
+#     sh {{omc_cloudagent_install_dir}}/agent_inst/bin/omcli upgrade agent
+#   become: yes
+#   become_user: "{{omc_cloudagent_user}}"
+#   ignore_errors: yes
+
+- name: ensure agent is running
+  shell: |
+    sh {{omc_cloudagent_install_dir}}/agent_inst/bin/omcli start agent
+  become: yes
+  become_user: "{{omc_cloudagent_user}}"
+  register: agent_startup
+  failed_when:
+    - "agent_startup.rc is defined"
+    - "agent_startup.rc > 0"
+  changed_when:
+    - "agent_startup.rc is defined"
+    - "agent_startup.rc == 0"
+    - "'Agent is already running' not in agent_startup.stdout"
+
+- name: set default file acl permissions for cloudagent user
+  shell: |
+    find  {{item.path}} -maxdepth 1 -xdev -type d -exec setfacl -d -m u:{{omc_cloudagent_user}}:{{item.permissions}} "{}" \;
+  with_items: "{{ omc_cloudagent_default_permissions }}"
+  register: agent_default_permissions
+  become: yes
+  become_user: root
+  changed_when:
+    - "'No such file or directory' not  in agent_default_permissions.stderr"
+    - "'Operation not supported' not  in agent_default_permissions.stderr"
+
+  failed_when:
+    - agent_default_permissions.rc is defined
+    - agent_default_permissions.rc > 0
+    - "'No such file or directory' not  in agent_default_permissions.stderr"
+    - "'Operation not supported' not  in agent_default_permissions.stderr"
+
+- name: set ACL permissions for cloudagent user on existing files
+  shell: |
+    find  {{item.path}} -maxdepth 1 -xdev -exec setfacl -m u:{{omc_cloudagent_user}}:{{item.permissions}} "{}" \;
+  with_items: "{{ omc_cloudagent_default_permissions }}"
+  register: agent_file_permissions
+  become: yes
+  become_user: root
+  changed_when:
+    - "'No such file or directory' not  in agent_file_permissions.stderr"
+    - "'Operation not supported' not  in agent_file_permissions.stderr"
+
+  failed_when:
+    - agent_file_permissions.rc is defined
+    - agent_file_permissions.rc > 0
+    - "'No such file or directory' not  in agent_file_permissions.stderr"
+    - "'Operation not supported' not  in agent_file_permissions.stderr"
+
+- name: set user defined default file acl permissions for cloudagent user
+  shell: |
+    find  {{item.path}} -maxdepth 1 -xdev -type d -exec setfacl -d -m u:{{omc_cloudagent_user}}:{{item.permissions}} "{}" \;
+  with_items: "{{ omc_cloudagent_permissions }}"
+  become: yes
+  become_user: root
+  register: user_default_permissions
+  failed_when:
+    - user_default_permissions.rc is defined
+    - user_default_permissions.rc > 0
+    - "'No such file or directory' not  in user_default_permissions.stderr"
+    - "'Operation not supported' not  in user_default_permissions.stderr"
+
+  changed_when:
+    - "'No such file or directory' not  in user_default_permissions.stderr"
+    - "'Operation not supported' not  in user_default_permissions.stderr"
+  when:
+    - omc_cloudagent_permissions is defined
+
+- name: set user defined ACL permissions for cloudagent user on existing files
+  shell: |
+    find  {{item.path}} -maxdepth 1 -xdev -exec setfacl -m u:{{omc_cloudagent_user}}:{{item.permissions}} "{}" \;
+  with_items: "{{ omc_cloudagent_permissions }}"
+  become: yes
+  become_user: root
+  register: user_file_permissions
+  when:
+    - omc_cloudagent_permissions is defined
+  changed_when:
+    - "'No such file or directory' not  in user_file_permissions.stderr"
+    - "'Operation not supported' not  in user_file_permissions.stderr"
+  failed_when:
+    - user_file_permissions.rc is defined
+    - user_file_permissions.rc > 0
+    - "'No such file or directory' not  in user_file_permissions.stderr"
+    - "'Operation not supported' not  in user_file_permissions.stderr"
+
+- name: set CPU throttle on cloud agent to ensure it doesn't consume too much CPU
+  shell: |
+    sh {{omc_cloudagent_install_dir}}/agent_inst/bin/omcli setproperty agent -allow_new -name _targetedCpuPct -value {{omc_cloudagent_cpu_throttle_percentage}}
+  become: yes
+  become_user: "{{omc_cloudagent_user}}"
+  when:
+    - "omc_cloudagent_cpu_throttle_percentage is defined"

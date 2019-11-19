@@ -1,0 +1,127 @@
+---
+
+- name: determine if there is an existing installation
+  stat:
+    path: "{{ omc_gateway_install_dir }}/agent_inst/bin/omcli"
+  register: existing_omc_install
+# - name: "DEBUG: HELP WITH CONDITIONAL"
+#   debug:
+#     msg: |
+#       existing_omc_install = {{existing_omc_install}}
+#       omc_gateway_reinstall_agent = {{omc_gateway_reinstall_agent}}
+
+- name: "found existing OMC installation"
+  block:
+    - name: make sure the agent is down
+      shell: |
+        sh {{omc_gateway_install_dir}}/agent_inst/bin/omcli stop agent
+      become: yes
+      become_user: "{{existing_omc_install.stat.pw_name}}"
+      ignore_errors: yes
+
+    - name: Remove existing installation and preparing for re-install
+      become: yes
+      become_user: root
+      file:
+        state: absent
+        path: "{{ item }}"
+        force: yes
+      #ignore_errors: yes
+      with_items:
+        - "{{omc_gateway_install_dir}}"
+
+  when:
+    - existing_omc_install.stat.exists
+    - omc_gateway_reinstall_agent
+    - existing_omc_install.stat.pw_name is defined
+
+- name: Preparing to install agent
+  block:
+
+    - name: "creating required directories on {{ansible_hostname}}"
+      file:
+        dest: "{{ item }}"
+        state: directory
+        owner: "{{ omc_gateway_user }}"
+        group: "{{ omc_gateway_group }}"
+      with_items:
+        - "{{ omc_gateway_stage_dir }}"
+        - "{{ omc_gateway_install_dir }}"
+      become: yes
+      become_user: root
+
+    - name: "uploading and unarchiving cloud agent install files on {{ansible_hostname}}"
+      unarchive:
+        src: "{{ role_path }}/files/gateway_linux.x64.zip"
+        dest: "{{ omc_gateway_stage_dir }}"
+      tags: install
+
+    - name: installing omc gateway
+      shell: |
+        sh {{ omc_gateway_install_cmd }}
+      args:
+        chdir: "{{ omc_gateway_stage_dir }}"
+      register: install_omc_gateway
+      become: yes
+      become_user: "{{ omc_gateway_user }}"
+      failed_when:
+        - "install_omc_gateway.rc is defined"
+        - "install_omc_gateway.rc > 0"
+
+    - name: locate root.sh file for post-installation
+      shell:
+        cmd: |
+          find -L "{{omc_gateway_install_dir}}" -name "root.sh" | head -1
+      register: find_root_sh
+    - name: executing root.sh configuration script
+      shell: |
+        sh {{item}}
+      args:
+        chdir: "{{ omc_gateway_stage_dir }}"
+      become: yes
+      become_user: root
+      register: execute_root_script
+      with_items: "{{ find_root_sh.stdout_lines }}"
+      failed_when:
+        - "execute_root_script.rc is defined"
+        - "execute_root_script.rc > 0"
+      when:
+        - "install_omc_gateway.rc is defined"
+        - "install_omc_gateway.rc == 0"
+
+    - name: OMC cloud agent installation completed successfully.
+      set_fact:
+        omc_gateway_installed: yes
+      when:
+        - "install_omc_gateway.rc is defined"
+        - "install_omc_gateway.rc == 0"
+        - "execute_root_script.rc is defined"
+        - "execute_root_script.rc == 0"
+  when:
+    - "(existing_omc_install.stat.exists and omc_gateway_reinstall_agent and existing_omc_install.stat.pw_name is defined) or (existing_omc_install.stat.exists == False)"
+- name: ensure installed agent is running and configured to start at boot
+  block:
+    - name: Copy templated initialization script
+      template:
+        src: "{{ role_path }}/templates/init.omc-gateway.j2"
+        dest: /etc/init.d/omc-gateway
+        owner: root
+        group: root
+        mode: 0740
+    - name: Enable and start at boot
+      service:
+        name: omc-agent
+        state: started
+        enabled: yes
+    - name: Verify the agent is running on the specified port
+      wait_for:
+        port: "{{ item }}"
+        state: started # Port should be open
+        delay: 5 # No wait before first check (sec)
+        timeout: 5 # Stop checking after timeout (sec)
+      with_items:
+        - "{{ omc_gateway_agent_port }}"
+    - set_fact:
+        omc_gateway_enabled: yes
+  when:
+    - "omc_gateway_installed is defined and omc_gateway_installed"

@@ -1,0 +1,15 @@
+---
+- name: set basic variables for use in play
+  set_fact:
+    omc_gateway_install_cmd: |
+      {{omc_gateway_stage_dir}}/AgentInstall.sh \
+        TENANT_NAME={{ omc_gateway_tenant_name }} \
+        AGENT_REGISTRATION_KEY={{ omc_gateway_registration_key}} \
+        AGENT_BASE_DIRECTORY={{ omc_gateway_install_dir }} \
+        AGENT_PORT={{ omc_gateway_agent_port }} \
+        OMC_URL={{ omc_gateway_url_endpoint }} \
+        REINSTALL={% if omc_gateway_reinstall_agent %}TRUE{% else %}FALSE{% endif %}
+    omc_gateway_user: "{{omc_gateway_users.0.username }}"
+    omc_gateway_group: "{{omc_gateway_users.0.group }}"
+    omc_gateway_software: "cloudagent_linux.x64.zip"
+    omc_gateway_ulimts: "{{omc_gateway_users.0.ulimits }}"
