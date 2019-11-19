@@ -15,6 +15,7 @@
   delegate_to: localhost
   register: ls_omc_gateway_image
   run_once: yes
+
 - name: "download latest cloud agent from public URL"
   get_url:
     url: "{{ omc_gateway_software_url }}"

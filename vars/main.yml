@@ -13,7 +13,7 @@ omc_gateway_required_packages:
   - bc
   #- setarch
   - jq
-
+  - redhat-lsb-core
 
 omc_gateway_authorized_keys_file: ".ssh/authorized_keys"
 
